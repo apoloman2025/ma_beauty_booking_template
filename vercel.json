@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "outputDirectory": "build/web",
+  "routes": [
+    {
+      "src": "^/(.*)$",
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate"
+      },
+      "dest": "/$1"
+    }
+  ]
+}
