@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "outputDirectory": "web_dist",
+  "outputDirectory": "public",
   "routes": [
     {
       "src": "^/(.*)$",
