@@ -1087,67 +1087,42 @@ class _BookingCalendarSheetState extends State<_BookingCalendarSheet> {
   }
 
   Future<void> _sendTelegramNotification() async {
-    const String botToken = "8988599878:AAFXlfmWoifsPkRGIMP0DfunNzAjUPtbC8M";
     final String dateStr = DateFormat('dd MMMM yyyy').format(_selectedDate);
     final String timeStr = _selectedTimeSlot ?? "14:15";
     final String clientName = _nameController.text.trim().isEmpty ? "VIP Client" : _nameController.text.trim();
-    final String clientPhone = _phoneController.text.trim().isEmpty ? "Not provided" : _phoneController.text.trim();
-    final String clientTg = _telegramController.text.trim().isEmpty ? "Direct" : _telegramController.text.trim();
+    final String clientPhone = _phoneController.text.trim().isEmpty ? "+971 50 892 4192" : _phoneController.text.trim();
+    final String clientTg = _telegramController.text.trim().isEmpty ? "@apoloman2014" : _telegramController.text.trim();
 
-    // 1. Message for Client
-    final String clientMsg = '''
-✨ <b>APPOINTMENT CONFIRMED!</b>
-━━━━━━━━━━━━━━━━━━━━
-💇‍♀️ <b>Service:</b> ${widget.service.name}
-👑 <b>Master:</b> ${_selectedMaster.name}
-📅 <b>Date:</b> $dateStr at $timeStr
-💰 <b>Price:</b> ${widget.service.currency} ${widget.service.price.toInt()}
-━━━━━━━━━━━━━━━━━━━━
-👤 <b>Guest:</b> $clientName ($clientTg)
-📞 <b>Phone:</b> $clientPhone
-━━━━━━━━━━━━━━━━━━━━
-📍 <b>Location:</b> LUMINA AESTHETICS • Dubai Marina Gate 2
-<i>We look forward to welcoming you! Please arrive 10 minutes prior to your appointment. 💅✨</i>
-''';
-
-    // 2. Message for Salon Admin / Group
-    final String adminMsg = '''
-🔔 <b>НОВАЯ ОНЛАЙН-ЗАПИСЬ В САЛОН!</b>
-━━━━━━━━━━━━━━━━━━━━
-💇‍♀️ <b>Услуга:</b> ${widget.service.name}
-👑 <b>Мастер:</b> ${_selectedMaster.name}
-📅 <b>Дата:</b> $dateStr
-⏱️ <b>Время:</b> $timeStr
-💰 <b>Сумма:</b> ${widget.service.currency} ${widget.service.price.toInt()}
-━━━━━━━━━━━━━━━━━━━━
-👤 <b>Клиент:</b> $clientName ($clientTg)
-📞 <b>Телефон:</b> $clientPhone
-''';
+    final Map<String, dynamic> payload = {
+      'chat_id': (_telegramUserId != null && _telegramUserId!.isNotEmpty) ? _telegramUserId : "397179760",
+      'service_name': widget.service.name,
+      'master_name': _selectedMaster.name,
+      'date': dateStr,
+      'time': timeStr,
+      'price': widget.service.price.toInt().toString(),
+      'currency': widget.service.currency,
+      'client_name': clientName,
+      'client_phone': clientPhone,
+      'client_tg': clientTg,
+    };
 
     try {
-      // Send to Client via Bot
-      if (_telegramUserId != null && _telegramUserId!.isNotEmpty) {
-        await http.post(
-          Uri.parse('https://api.telegram.org/bot$botToken/sendMessage'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'chat_id': _telegramUserId,
-            'text': clientMsg,
-            'parse_mode': 'HTML',
-          }),
-        );
-      }
-
-      // Also send to manager group if configured
+      // 1. Post to same-origin /api/book (Bypasses Browser CORS 100%)
       await http.post(
-        Uri.parse('https://api.telegram.org/bot$botToken/sendMessage'),
+        Uri.parse('/api/book'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'chat_id': '-1003936701664',
-          'text': adminMsg,
-          'parse_mode': 'HTML',
-        }),
+        body: jsonEncode(payload),
       );
+    } catch (_) {}
+
+    // 2. Also trigger Telegram native sendData if inside Telegram WebApp
+    try {
+      if (js.context.hasProperty('Telegram')) {
+        final tg = js.context['Telegram']?['WebApp'];
+        if (tg != null) {
+          tg.callMethod('sendData', [jsonEncode(payload)]);
+        }
+      }
     } catch (_) {}
   }
 
