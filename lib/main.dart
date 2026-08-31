@@ -1,3 +1,4 @@
+import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:js' as js;
 import 'package:flutter/material.dart';
@@ -764,6 +765,7 @@ class _BookingCalendarSheet extends StatefulWidget {
 }
 
 class _BookingCalendarSheetState extends State<_BookingCalendarSheet> {
+  String? _telegramUserId;
   late Master _selectedMaster;
   DateTime _selectedDate = DateTime.now();
   String? _selectedTimeSlot;
@@ -789,10 +791,12 @@ class _BookingCalendarSheetState extends State<_BookingCalendarSheet> {
       if (tg != null) {
         final user = tg['initDataUnsafe']?['user'];
         if (user != null) {
+          final id = user['id'];
+          if (id != null) _telegramUserId = id.toString();
           final username = user['username'];
           final first = user['first_name'];
-          if (username != null) _telegramController.text = "@$username";
-          if (first != null) _nameController.text = first.toString();
+          if (username != null && username.toString().isNotEmpty) _telegramController.text = "@$username";
+          if (first != null && first.toString().isNotEmpty) _nameController.text = first.toString();
         }
       }
     } catch (_) {}
@@ -1082,8 +1086,74 @@ class _BookingCalendarSheetState extends State<_BookingCalendarSheet> {
     );
   }
 
+  Future<void> _sendTelegramNotification() async {
+    const String botToken = "8988599878:AAFXlfmWoifsPkRGIMP0DfunNzAjUPtbC8M";
+    final String dateStr = DateFormat('dd MMMM yyyy').format(_selectedDate);
+    final String timeStr = _selectedTimeSlot ?? "14:15";
+    final String clientName = _nameController.text.trim().isEmpty ? "VIP Client" : _nameController.text.trim();
+    final String clientPhone = _phoneController.text.trim().isEmpty ? "Not provided" : _phoneController.text.trim();
+    final String clientTg = _telegramController.text.trim().isEmpty ? "Direct" : _telegramController.text.trim();
+
+    // 1. Message for Client
+    final String clientMsg = '''
+✨ <b>APPOINTMENT CONFIRMED!</b>
+━━━━━━━━━━━━━━━━━━━━
+💇‍♀️ <b>Service:</b> ${widget.service.name}
+👑 <b>Master:</b> ${_selectedMaster.name}
+📅 <b>Date:</b> $dateStr at $timeStr
+💰 <b>Price:</b> ${widget.service.currency} ${widget.service.price.toInt()}
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>Guest:</b> $clientName ($clientTg)
+📞 <b>Phone:</b> $clientPhone
+━━━━━━━━━━━━━━━━━━━━
+📍 <b>Location:</b> LUMINA AESTHETICS • Dubai Marina Gate 2
+<i>We look forward to welcoming you! Please arrive 10 minutes prior to your appointment. 💅✨</i>
+''';
+
+    // 2. Message for Salon Admin / Group
+    final String adminMsg = '''
+🔔 <b>НОВАЯ ОНЛАЙН-ЗАПИСЬ В САЛОН!</b>
+━━━━━━━━━━━━━━━━━━━━
+💇‍♀️ <b>Услуга:</b> ${widget.service.name}
+👑 <b>Мастер:</b> ${_selectedMaster.name}
+📅 <b>Дата:</b> $dateStr
+⏱️ <b>Время:</b> $timeStr
+💰 <b>Сумма:</b> ${widget.service.currency} ${widget.service.price.toInt()}
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>Клиент:</b> $clientName ($clientTg)
+📞 <b>Телефон:</b> $clientPhone
+''';
+
+    try {
+      // Send to Client via Bot
+      if (_telegramUserId != null && _telegramUserId!.isNotEmpty) {
+        await http.post(
+          Uri.parse('https://api.telegram.org/bot$botToken/sendMessage'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'chat_id': _telegramUserId,
+            'text': clientMsg,
+            'parse_mode': 'HTML',
+          }),
+        );
+      }
+
+      // Also send to manager group if configured
+      await http.post(
+        Uri.parse('https://api.telegram.org/bot$botToken/sendMessage'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'chat_id': '-1003936701664',
+          'text': adminMsg,
+          'parse_mode': 'HTML',
+        }),
+      );
+    } catch (_) {}
+  }
+
   void _confirmBooking() {
     HapticFeedback.heavyImpact();
+    _sendTelegramNotification();
     Navigator.pop(context);
 
     // Show Success Booking Ticket
